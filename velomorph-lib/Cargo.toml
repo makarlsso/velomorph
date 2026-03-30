@@ -1,0 +1,32 @@
+[package]
+name = "velomorph"
+description = "High-performance zero-copy struct transformation for Rust with asynchronous background deallocation."
+# categories = ["network-programming", "asynchronous", "development-tools"]
+# keywords = ["ingestion", "metrics", "tokio", "observability", "pipeline"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+readme = "README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+# Use the local workspace macro crate.
+velomorph-derive = { path = "../velomorph-derive", version = "0.1.0" }
+
+# External dependencies are defined in the workspace root.
+tokio = { workspace = true, optional = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# Used for tests and examples.
+tokio = { workspace = true, features = ["full"] }
+
+[features]
+default = ["async"]
+async = ["dep:tokio"]

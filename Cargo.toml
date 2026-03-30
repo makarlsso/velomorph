@@ -1,0 +1,58 @@
+[workspace]
+members = [
+    "velomorph-lib",
+    "velomorph-derive",
+    "examples/full_showcase",
+]
+default-members = ["examples/full_showcase"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Magnus Karlsson <makarlsso@ioop.se"]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/makarlsso/velomorph"
+documentation = "https://docs.rs/velomorph"
+readme = "README.md"
+
+[workspace.dependencies]
+tokio = { version = "1.50", features = ["rt", "rt-multi-thread", "sync"] }
+thiserror = "2.0"
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+
+# Optimization profiles for speed and release builds
+[profile.dev]
+opt-level = 0
+debug = true
+split-debuginfo = "unpacked"
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+debug = "line-tables-only"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
+
+# Fast development builds
+[profile.dev-fast]
+inherits = "dev"
+opt-level = 1
+debug = true
+split-debuginfo = "unpacked"
+
+# Optimized release builds with symbols for profiling
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+strip = "none"
+
+# Minimum binary size for production (opt-level "z" prioritises size over speed)
+[profile.release-min-size]
+inherits = "release"
+opt-level = "z"
+lto = "fat"

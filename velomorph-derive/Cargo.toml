@@ -1,0 +1,22 @@
+[package]
+name = "velomorph-derive"
+description = "Procedural macros for the velomorph crate."
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+readme = "README.md"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
