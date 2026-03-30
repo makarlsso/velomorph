@@ -1,8 +1,14 @@
 [package]
 name = "velomorph"
 description = "High-performance zero-copy struct transformation for Rust with asynchronous background deallocation."
-# categories = ["network-programming", "asynchronous", "development-tools"]
-# keywords = ["ingestion", "metrics", "tokio", "observability", "pipeline"]
+categories = [
+    "memory-management",
+    "asynchronous",
+    "development-tools",
+    "network-programming",
+    "data-structures",
+]
+keywords = ["zero-copy", "transformation", "tokio", "derive", "latency"]
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

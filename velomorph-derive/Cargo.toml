@@ -1,6 +1,8 @@
 [package]
 name = "velomorph-derive"
 description = "Procedural macros for the velomorph crate."
+categories = ["development-tools"]
+keywords = ["macros", "derive"]
 license.workspace = true
 repository.workspace = true
 documentation.workspace = true
