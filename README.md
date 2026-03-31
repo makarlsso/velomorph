@@ -7,7 +7,7 @@
 [![Build Status](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml/badge.svg)](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml)
 [![Crates.io Version](https://img.shields.io/crates/v/velomorph.svg)](https://crates.io/crates/velomorph)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Version](https://img.shields.io/badge/version-0.1.1-blue)
 ![Rust](https://img.shields.io/badge/rust-1.75%2B-brown?logo=rust)
 
 </div>
@@ -48,7 +48,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-velomorph = "0.1.0"
+velomorph = "0.1.1"
 ```
 Then create `src/main.rs`:
 
