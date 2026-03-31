@@ -73,6 +73,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Normalize VERSION_EXPECTED so that either "1.2.3" or "v1.2.3" work.
+VERSION_EXPECTED="${VERSION_EXPECTED#v}"
+
 RUN_MODE="--dry-run"
 if [[ "${EXECUTE}" == "true" ]]; then
   RUN_MODE=""
