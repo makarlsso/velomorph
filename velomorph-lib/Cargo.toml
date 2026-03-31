@@ -22,15 +22,11 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-# Use the local workspace macro crate.
 velomorph-derive = { path = "../velomorph-derive", version = "0.1.0" }
-
-# External dependencies are defined in the workspace root.
 tokio = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-# Used for tests and examples.
 tokio = { workspace = true, features = ["full"] }
 
 [features]

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.1] - 2026-03-31
+
+### Added
+- **Macros:** Support for field-level `#[morph(from = "...")]` to remap source field names on the fly.
+- **Example:** Updated `full_showcase` example to demonstrate renaming external/legacy fields (e.g. `uuid_v4` → `id`, `user_str` → `username`), and to use real UUID v4 values.
+- **Docs:** Updated crate-level docs and README examples to match the new field-renaming and UUID-based API.
+
+### Changed
+
+### Fixed
+
+---
+
 ## [0.1.0] - 2026-03-30
 
 ### Added
@@ -21,3 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed

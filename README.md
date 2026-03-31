@@ -55,21 +55,26 @@ Then create `src/main.rs`:
 **`src/main.rs`**
 
 ```rust
-use velomorph::{Janitor, TryMorph, Morph};
 use std::borrow::Cow;
+use uuid::Uuid;
+use velomorph::{Janitor, TryMorph, Morph};
 
 // 1. Define your raw source data (e.g., from a network buffer).
-pub struct RawInput<'a> {
-    pub id: Option<u64>,
-    pub tag: &'a str,
+pub struct RawInput <'a> {
+    pub uuid_v4: Option<Uuid>,  // Legacy / external field name
+    pub user_str: &'a str,      // Another external/opaque name
     pub payload: Option<Vec<u8>>,
 }
 
-// 2. Define your optimized domain model
+// 2. Define your optimized domain model.
+//    Here we also *rename* the incoming fields using `#[morph(from = "...")]`.
 #[derive(Morph, Debug)]
 pub struct InternalEvent<'a> {
-    pub id: u64,                // Strict: Returns Error if None in source
-    pub tag: Cow<'a, str>,      // Zero-copy: Borrows from the source
+    #[morph(from = "uuid_v4")]
+    pub id: Uuid,               // Strict: Returns Error if None in source
+
+    #[morph(from = "user_str")]
+    pub username: Cow<'a, str>, // Zero-copy: Borrows from the source
 }
 
 #[tokio::main]
@@ -78,14 +83,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let janitor = Janitor::new();
     
     let raw = RawInput {
-        id: Some(42),
-        tag: "sensor_alpha_01",
+        uuid_v4: Some(Uuid::new_v4()),
+        user_str: "sensor_alpha_01",
         payload: Some(vec![0u8; 1024 * 1024 * 50]), // 50MB payload
     };
 
     // Morph!
     // - 'payload' is moved to the Janitor for async drop.
-    // - 'tag' is borrowed (zero allocations).
+    // - 'username' is borrowed (zero allocations).
     // - 'id' is validated and unwrapped.
     let event: InternalEvent = raw.try_morph(&janitor)?;
 

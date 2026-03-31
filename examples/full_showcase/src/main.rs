@@ -1,12 +1,14 @@
 use std::borrow::Cow;
 use std::time::Duration;
 use tokio::time::sleep;
+use uuid::Uuid;
 use velomorph::{Janitor, Morph, TryMorph};
 
 // 1. Raw incoming data (e.g., decoded from a Network Buffer, Protobuf, or JSON)
 pub struct RawInput<'a> {
-    pub request_id: Option<u64>,
-    pub user_tag: &'a str, // A string reference pointing to the raw buffer
+    // Legacy/ugly field names coming from an external system:
+    pub uuid_v4: Option<Uuid>,
+    pub user_str: &'a str, // A string reference pointing to the raw buffer
     pub metadata: Option<String>, // Optional metadata field
     pub payload: Option<Vec<u8>>, // Heavy data (e.g., a 100MB file or image)
 }
@@ -14,11 +16,15 @@ pub struct RawInput<'a> {
 // 2. The internal, high-performance Domain Model
 #[derive(Morph, Debug)]
 pub struct ProcessedEvent<'a> {
-    // [STRICT] Must exist, otherwise returns MorphError::MissingField
-    pub request_id: u64,
+    // [STRICT] Must exist, otherwise returns MorphError::MissingField.
+    // We also rename from `uuid_v4` -> `id` using the field-level attribute.
+    #[morph(from = "uuid_v4")]
+    pub id: Uuid,
 
-    // [ZERO-COPY] If the string isn't modified, it points directly to the source buffer
-    pub user_tag: Cow<'a, str>,
+    // [ZERO-COPY] If the string isn't modified, it points directly to the source buffer.
+    // Here we rename `user_str` -> `username`.
+    #[morph(from = "user_str")]
+    pub username: Cow<'a, str>,
 
     // [PASSTHROUGH] Maintained as an Option if present in the source
     pub metadata: Option<String>,
@@ -33,8 +39,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // SIMULATION: An incoming packet with a 100MB payload
     let raw_packet = RawInput {
-        request_id: Some(8888),
-        user_tag: "admin_user_01",
+        uuid_v4: Some(Uuid::new_v4()),
+        user_str: "admin_user_01",
         metadata: Some("Region: EU-North".to_string()),
         payload: Some(vec![0u8; 100 * 1024 * 1024]), // 100 MB of heap data
     };
@@ -56,9 +62,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- RESULTS ---
     println!("Transformation completed in: {:?}", duration);
-    println!("Event ID: {}", event.request_id);
+    println!("Event ID: {}", event.id);
 
-    match &event.user_tag {
+    match &event.username {
         Cow::Borrowed(s) => println!(
             "Memory Status: Using borrowed string '{}' (Zero allocations)",
             s

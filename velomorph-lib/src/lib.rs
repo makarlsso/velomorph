@@ -8,24 +8,31 @@
 //! # Quick Example
 //! ```ignore
 //! use std::borrow::Cow;
+//! use uuid::Uuid;
 //! use velomorph::{Janitor, Morph, TryMorph};
 //!
 //! pub struct RawInput<'a> {
-//!     pub id: Option<u64>,
-//!     pub tag: &'a str,
+//!     // Legacy/external names from an upstream system:
+//!     pub uuid_v4: Option<Uuid>,
+//!     pub user_str: &'a str,
 //!     pub payload: Option<Vec<u8>>,
 //! }
 //!
 //! #[derive(Morph, Debug)]
 //! pub struct Event<'a> {
-//!     pub id: u64,
-//!     pub tag: Cow<'a, str>,
+//!     // Rename `uuid_v4` -> `id` while enforcing presence:
+//!     #[morph(from = "uuid_v4")]
+//!     pub id: Uuid,
+//!
+//!     // Rename `user_str` -> `username` while borrowing the string:
+//!     #[morph(from = "user_str")]
+//!     pub username: Cow<'a, str>,
 //! }
 //!
 //! let janitor = Janitor::new();
 //! let raw = RawInput {
-//!     id: Some(1),
-//!     tag: "edge-a",
+//!     uuid_v4: Some(Uuid::new_v4()),
+//!     user_str: "edge-a",
 //!     payload: Some(vec![1, 2, 3]),
 //! };
 //! let event: Event = raw.try_morph(&janitor)?;

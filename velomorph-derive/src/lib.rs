@@ -2,12 +2,15 @@
 //!
 //! Use `#[derive(Morph)]` on a target struct to generate a `TryMorph`
 //! implementation from a source input type.
-//! The source defaults to `RawInput`, or can be configured with
-//! `#[morph(from = "TypePath")]`.
+//!
+//! - The **source type** defaults to `RawInput<...>`, or can be configured with
+//!   a *type-level* attribute: `#[morph(from = "TypePath<'a>")]`.
+//! - Individual **fields** can map from differently named source fields via a
+//!   *field-level* attribute: `#[morph(from = "source_field_name")]`.
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, LitStr, Type, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, LitStr, Type, parse_macro_input, spanned::Spanned};
 
 /// Derives a `velomorph::TryMorph<Target>` implementation.
 ///
@@ -47,21 +50,24 @@ pub fn derive_morph(input: TokenStream) -> TokenStream {
     };
 
     let field_mappings = fields.iter().map(|f| {
-        let f_name = &f.ident;
+        let target_name = &f.ident;
+        // Allow renaming of the source field via: #[morph(from = "source_field_name")]
+        let source_name = resolve_source_field_ident(f);
+
         let is_target_option = is_type_name(&f.ty, "Option");
         let is_target_cow = is_type_name(&f.ty, "Cow");
 
         if is_target_cow {
             // Zero-copy: borrow data into a Cow.
-            quote! { #f_name: std::borrow::Cow::from(old.#f_name) }
+            quote! { #target_name: std::borrow::Cow::from(old.#source_name) }
         } else if is_target_option {
             // Passthrough: preserve optional state.
-            quote! { #f_name: old.#f_name }
+            quote! { #target_name: old.#source_name }
         } else {
             // Strict: requires a value or returns MorphError.
-            let err_field = f_name.as_ref().unwrap().to_string();
+            let err_field = target_name.as_ref().unwrap().to_string();
             quote! {
-                #f_name: old.#f_name.ok_or(velomorph::MorphError::MissingField(#err_field.to_string()))?
+                #target_name: old.#source_name.ok_or(velomorph::MorphError::MissingField(#err_field.to_string()))?
             }
         }
     });
@@ -92,6 +98,49 @@ fn is_type_name(ty: &Type, target: &str) -> bool {
         return tp.path.segments.last().is_some_and(|s| s.ident == target);
     }
     false
+}
+
+/// Resolve which source-field identifier should back a given target field.
+///
+/// Defaults to using the target field's own name, but can be overridden with
+/// a field attribute:
+///
+/// ```ignore
+/// #[morph(from = "uuid_v4")]
+/// pub id: u64,
+/// ```
+fn resolve_source_field_ident(field: &syn::Field) -> syn::Ident {
+    for attr in &field.attrs {
+        if !attr.path().is_ident("morph") {
+            continue;
+        }
+
+        let mut result: Option<syn::Ident> = None;
+
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("from") {
+                let lit: LitStr = meta.value()?.parse()?;
+                let name = lit.value();
+                // Use the target field's span for better error reporting.
+                if let Some(target_ident) = &field.ident {
+                    result = Some(syn::Ident::new(&name, target_ident.span()));
+                } else {
+                    result = Some(syn::Ident::new(&name, meta.path.span()));
+                }
+            }
+            Ok(())
+        });
+
+        if let Some(ident) = result {
+            return ident;
+        }
+    }
+
+    // Fallback: use the field's own identifier (standard 1:1 mapping).
+    field
+        .ident
+        .clone()
+        .expect("Velomorph requires named fields on the target struct")
 }
 
 fn resolve_from_type(

@@ -183,12 +183,13 @@ wait_until_indexed() {
     local line
     line="$(cargo search "${crate}" --limit 1 2>/dev/null || true)"
 
-    if [[ "${line}" == ${crate}" = \""${expected}"\""* ]]; then
+    # Expect a line like: "<crate> = \"<version>\" ..."
+    if [[ "${line}" == "${crate} = \"${expected}\""* ]]; then
       echo "Indexed: ${line}"
       return 0
     fi
 
-    echo "Attempt ${i}/${POLL_MAX_ATTEMPTS}: not indexed yet."
+    echo "Attempt ${i}/${POLL_MAX_ATTEMPTS}: not indexed yet. Last result: ${line}"
     sleep "${POLL_INTERVAL_SECONDS}"
   done
 

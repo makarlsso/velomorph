@@ -6,12 +6,7 @@ edition.workspace = true
 description = "A demonstration of the Velomorph high-performance transformation engine."
 
 [dependencies]
-# We point to the local library crate. 
-# Once you publish to crates.io, this would be: velomorph-lib = "0.1.0"
 velomorph = { path = "../../velomorph-lib" }
-
-# Required for the async main function and sleep
 tokio = { workspace = true, features = ["full"] }
-
-# Required if you want to handle the specific error types in main
 thiserror = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
