@@ -273,3 +273,64 @@ fn morph_supports_enum_same_name_and_variant_override() {
         }
     ));
 }
+
+#[test]
+fn morph_supports_vec_to_vec_mapping() {
+    #[cfg(feature = "janitor")]
+    let janitor = Janitor::default();
+    let input = vec![
+        TransformSource {
+            count_raw: 10,
+            threshold: Some(3),
+            payload: None,
+        },
+        TransformSource {
+            count_raw: 20,
+            threshold: None,
+            payload: Some(vec![1, 2, 3]),
+        },
+    ];
+
+    #[cfg(feature = "janitor")]
+    let out: Vec<TransformTarget> =
+        TryMorph::try_morph(input, &janitor).expect("vec morph succeeds");
+    #[cfg(not(feature = "janitor"))]
+    let out: Vec<TransformTarget> = TryMorph::try_morph(input).expect("vec morph succeeds");
+
+    assert_eq!(out.len(), 2);
+    assert_eq!(out[0].count, 10);
+    assert_eq!(out[0].threshold, 3);
+    assert_eq!(out[1].count, 20);
+    assert_eq!(out[1].threshold, 7);
+}
+
+#[test]
+fn morph_vec_to_vec_propagates_first_error() {
+    #[cfg(feature = "janitor")]
+    let janitor = Janitor::default();
+    let input = vec![
+        TransformSource {
+            count_raw: 10,
+            threshold: Some(1),
+            payload: None,
+        },
+        TransformSource {
+            count_raw: 2001,
+            threshold: Some(1),
+            payload: None,
+        },
+        TransformSource {
+            count_raw: 15,
+            threshold: Some(1),
+            payload: None,
+        },
+    ];
+
+    #[cfg(feature = "janitor")]
+    let err =
+        TryMorph::<Vec<TransformTarget>>::try_morph(input, &janitor).expect_err("vec morph fails");
+    #[cfg(not(feature = "janitor"))]
+    let err = TryMorph::<Vec<TransformTarget>>::try_morph(input).expect_err("vec morph fails");
+
+    assert!(matches!(err, MorphError::TransformError(msg) if msg.contains("too high")));
+}

@@ -9,7 +9,7 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Magnus Karlsson <makarlsso@ioop.se"]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/makarlsso/velomorph"
@@ -22,6 +22,7 @@ thiserror = "2.0"
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+criterion = { version = "0.8", features = ["html_reports"] }
 
 # Optimization profiles for speed and release builds
 [profile.dev]

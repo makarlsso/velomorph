@@ -22,13 +22,18 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-velomorph-derive = { path = "../velomorph-derive", version = "0.2.0" }
+velomorph-derive = { path = "../velomorph-derive", version = "0.2.1" }
 tokio = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
+criterion = { workspace = true }
 
 [features]
 default = []
 janitor = ["dep:tokio"]
+
+[[bench]]
+name = "morph_bench"
+harness = false

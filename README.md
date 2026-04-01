@@ -7,7 +7,7 @@
 [![Build Status](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml/badge.svg)](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml)
 [![Crates.io Version](https://img.shields.io/crates/v/velomorph.svg)](https://crates.io/crates/velomorph)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
-![Version](https://img.shields.io/badge/version-0.2.0-blue)
+![Version](https://img.shields.io/badge/version-0.2.1-blue)
 ![Rust](https://img.shields.io/badge/rust-1.75%2B-brown?logo=rust)
 
 </div>
@@ -49,12 +49,12 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-velomorph = "0.2.0"
+velomorph = "0.2.1"
 ```
 Enable Janitor offloading explicitly when needed:
 ```toml
 [dependencies]
-velomorph = { version = "0.2.0", features = ["janitor"] }
+velomorph = { version = "0.2.1", features = ["janitor"] }
 ```
 Then create `src/main.rs`:
 
@@ -173,6 +173,22 @@ struct Target {
 
 `with` transform functions currently use the form `fn(SourceType) -> Result<TargetType, E>`.
 Enum targets use same-name variant mapping by default, with per-variant overrides via `#[morph(from = "...")]`.
+
+### List Mapping (`Vec<T>` -> `Vec<U>`)
+
+You can morph whole vectors when each element implements `TryMorph` to the target type:
+
+```rust
+use velomorph::TryMorph;
+
+// Works without janitor feature:
+// let mapped: Vec<Target> = source_vec.try_morph()?;
+//
+// Works with janitor feature:
+// let mapped: Vec<Target> = source_vec.try_morph(&janitor)?;
+```
+
+This is implemented as `TryMorph<Vec<U>> for Vec<T>` where `T: TryMorph<U>`, and short-circuits on the first `MorphError`.
 
 ### Memory Safety & Lifetimes
 Velomorph is built on top of Rust's strict ownership rules. By using `Cow<'a, str>`, the compiler guarantees that the source buffer (e.g., your network packet) lives at least as long as your transformed `InternalEvent`. If the source buffer is dropped, the compiler will catch the error at build time.

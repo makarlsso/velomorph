@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-04-01
+
+### Added
+- **API:** Added blanket list mapping support: `TryMorph<Vec<U>> for Vec<T>` where `T: TryMorph<U>`, including both janitor and non-janitor signatures.
+- **Tests:** Added integration coverage for successful `Vec<T> -> Vec<U>` morphing and first-error propagation behavior.
+- **Benchmarks:** Benchmarking is available across existing morph paths in `morph_bench`; this release adds explicit Vec-to-Vec coverage (`VecMorph_NoPayloadClone`) with both Velomorph and manual mapping paths.
+
+### Changed
+- **Docs:** Updated README examples and dependency snippets to `0.2.1` and documented list mapping usage.
+
+### Fixed
+
+---
+
 ## [0.2.0] - 2026-04-01
 
 ### Added
