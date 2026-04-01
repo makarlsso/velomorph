@@ -10,3 +10,7 @@ velomorph = { path = "../../velomorph-lib" }
 tokio = { workspace = true, features = ["full"] }
 thiserror = { workspace = true }
 uuid = { version = "1", features = ["v4"] }
+
+[features]
+default = ["janitor"]
+janitor = ["velomorph/janitor"]

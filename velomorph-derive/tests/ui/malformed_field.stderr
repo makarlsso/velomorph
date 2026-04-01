@@ -1,0 +1,5 @@
+error: Unsupported field morph key. Expected one of: from, with, default, skip
+  --> tests/ui/malformed_field.rs:10:13
+   |
+10 |     #[morph(renamed = "id")]
+   |             ^^^^^^^

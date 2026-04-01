@@ -1,0 +1,5 @@
+error: Unsupported enum variant morph key. Expected: from
+  --> tests/ui/malformed_variant_attr.rs:10:13
+   |
+10 |     #[morph(bad = "A")]
+   |             ^^^

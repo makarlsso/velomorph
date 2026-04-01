@@ -7,7 +7,7 @@
 [![Build Status](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml/badge.svg)](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml)
 [![Crates.io Version](https://img.shields.io/crates/v/velomorph.svg)](https://crates.io/crates/velomorph)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
-![Version](https://img.shields.io/badge/version-0.1.1-blue)
+![Version](https://img.shields.io/badge/version-0.2.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.75%2B-brown?logo=rust)
 
 </div>
@@ -28,7 +28,8 @@ It solves three critical bottlenecks in data pipelines:
 * 🚀 **Zero-Copy Transformation**: Leverage Rust's ownership model to move or borrow data with zero heap allocations during morphing.
 * 🧹 **The Janitor Pattern**: Offload heavy payloads (like `Vec<u8>`) to a dedicated cleanup thread and protect P99 latency from deallocation spikes.
 * 🛡️ **Type-Aware Macro**: The `#[derive(Morph)]` macro automatically detects target types to decide between **Strict** (error if None), **Passthrough** (Option to Option), or **Borrowed** (Cow) modes.
-* 🔌 **Tokio Integration**: Built to run seamlessly within async runtimes, ensuring background cleanup doesn't interfere with your executor's task scheduling.
+* 🔀 **Advanced Mapping Controls**: Supports enum morphing, field transforms (`with`), defaults, skips, and type-level validation hooks.
+* 🔌 **Tokio Integration (Opt-in)**: Enable the `janitor` feature when background deallocation is needed.
 
 ---
 
@@ -48,7 +49,12 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-velomorph = "0.1.1"
+velomorph = "0.2.0"
+```
+Enable Janitor offloading explicitly when needed:
+```toml
+[dependencies]
+velomorph = { version = "0.2.0", features = ["janitor"] }
 ```
 Then create `src/main.rs`:
 
@@ -57,10 +63,12 @@ Then create `src/main.rs`:
 ```rust
 use std::borrow::Cow;
 use uuid::Uuid;
-use velomorph::{Janitor, TryMorph, Morph};
+use velomorph::{TryMorph, Morph};
+#[cfg(feature = "janitor")]
+use velomorph::Janitor;
 
 // 1. Define your raw source data (e.g., from a network buffer).
-pub struct RawInput <'a> {
+pub struct SourcePacket<'a> {
     pub uuid_v4: Option<Uuid>,  // Legacy / external field name
     pub user_str: &'a str,      // Another external/opaque name
     pub payload: Option<Vec<u8>>,
@@ -69,6 +77,7 @@ pub struct RawInput <'a> {
 // 2. Define your optimized domain model.
 //    Here we also *rename* the incoming fields using `#[morph(from = "...")]`.
 #[derive(Morph, Debug)]
+#[morph(from = "SourcePacket")]
 pub struct InternalEvent<'a> {
     #[morph(from = "uuid_v4")]
     pub id: Uuid,               // Strict: Returns Error if None in source
@@ -79,32 +88,51 @@ pub struct InternalEvent<'a> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize the background cleanup worker
+    // Initialize the background cleanup worker when enabled
+    #[cfg(feature = "janitor")]
     let janitor = Janitor::new();
     
-    let raw = RawInput {
+    let raw = SourcePacket {
         uuid_v4: Some(Uuid::new_v4()),
         user_str: "sensor_alpha_01",
         payload: Some(vec![0u8; 1024 * 1024 * 50]), // 50MB payload
     };
 
     // Morph!
-    // - 'payload' is moved to the Janitor for async drop.
+    // - `janitor` is available in this signature when the feature is enabled.
     // - 'username' is borrowed (zero allocations).
     // - 'id' is validated and unwrapped.
+    #[cfg(feature = "janitor")]
     let event: InternalEvent = raw.try_morph(&janitor)?;
+    #[cfg(not(feature = "janitor"))]
+    let event: InternalEvent = raw.try_morph()?;
 
     println!("Morphed event: {:?}", event);
     Ok(())
 }
 ```
 
+### Showcase Modes (Explicit Janitor Usage)
+
+The `full_showcase` example demonstrates both execution paths clearly:
+
+- Without janitor feature:
+```bash
+cargo run -p full_showcase
+```
+- With janitor feature enabled:
+```bash
+cargo run -p full_showcase --features janitor
+```
+
+In janitor mode, the example explicitly offloads the heavy payload via `Janitor::offload(...)` before morphing.
+
 ## 🛠 How it Works
 
 ### Background Deallocation (The Janitor Pattern)
-In high-load systems, calling `drop()` on a large `Vec` or a complex tree can take several milliseconds as the OS reclaims memory. **Velomorph** moves these objects to an isolated OS thread via an unbounded channel. 
+In high-load systems, calling `drop()` on a large `Vec` or a complex tree can take several milliseconds as the OS reclaims memory. **Velomorph** provides a Janitor helper that can move these objects to an isolated OS thread via an unbounded channel.
 
-This ensures that the thread handling your critical network requests or business logic never stalls due to memory management jitter. The deallocation happens in parallel, leaving your P99 latency untouched.
+This ensures that the thread handling your critical network requests or business logic never stalls due to memory management jitter when you choose to offload deallocation from your code path.
 
 
 
@@ -128,8 +156,39 @@ pub struct InternalEvent<'a> {
 }
 ```
 
+Advanced attributes:
+
+```rust
+#[derive(Morph)]
+#[morph(from = "Source", validate = "validate_target")]
+struct Target {
+    #[morph(from = "legacy_id", with = "parse_id")]
+    id: u64,
+    #[morph(default)]
+    retries: u32,
+    #[morph(skip)]
+    cache_key: String,
+}
+```
+
+`with` transform functions currently use the form `fn(SourceType) -> Result<TargetType, E>`.
+Enum targets use same-name variant mapping by default, with per-variant overrides via `#[morph(from = "...")]`.
+
 ### Memory Safety & Lifetimes
 Velomorph is built on top of Rust's strict ownership rules. By using `Cow<'a, str>`, the compiler guarantees that the source buffer (e.g., your network packet) lives at least as long as your transformed `InternalEvent`. If the source buffer is dropped, the compiler will catch the error at build time.
+
+---
+
+## 🗺 v0.2 Status
+
+Velomorph 0.2 includes:
+
+* 🧩 **Modular Janitor**: Optional background cleanup via feature flags.
+* 🏷 **Flexible Sources**: Type-level and field-level `from` mapping.
+* 🛠 **Custom Transforms**: Field-level `with` transforms.
+* 🧱 **Defaults & Skips**: Field-level `default` / `default = "..."` and `skip` controls.
+* 🏗 **Validation Logic**: Type-level post-transformation validation hooks.
+* 🔄 **Enum Support**: Same-name variant mapping with explicit variant overrides.
 
 ---
 

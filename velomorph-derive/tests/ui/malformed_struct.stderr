@@ -1,0 +1,5 @@
+error: Unsupported type-level morph key. Expected one of: from, validate
+ --> tests/ui/malformed_struct.rs:9:9
+  |
+9 | #[morph(source = "RawInput")]
+  |         ^^^^^^

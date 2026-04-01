@@ -1,0 +1,5 @@
+error: `skip` does not take a value.
+  --> tests/ui/malformed_skip_with.rs:10:13
+   |
+10 |     #[morph(skip, with = "convert")]
+   |             ^^^^

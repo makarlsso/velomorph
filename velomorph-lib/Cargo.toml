@@ -22,7 +22,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-velomorph-derive = { path = "../velomorph-derive", version = "0.1.0" }
+velomorph-derive = { path = "../velomorph-derive", version = "0.2.0" }
 tokio = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
@@ -30,5 +30,5 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["async"]
-async = ["dep:tokio"]
+default = []
+janitor = ["dep:tokio"]

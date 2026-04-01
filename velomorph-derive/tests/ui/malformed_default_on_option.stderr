@@ -1,0 +1,5 @@
+error: `default` is only valid for strict Option<T> -> T mappings.
+  --> tests/ui/malformed_default_on_option.rs:10:5
+   |
+10 |     #[morph(default)]
+   |     ^

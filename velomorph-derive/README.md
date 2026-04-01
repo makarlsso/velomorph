@@ -10,7 +10,7 @@ In most projects, depend on `velomorph` instead:
 
 ```toml
 [dependencies]
-velomorph = "0.1.0"
+velomorph = "0.2.0"
 ```
 
 Then derive on your target type:
@@ -23,6 +23,20 @@ struct Event {
     // ...
 }
 ```
+
+## Supported `#[morph(...)]` Attributes
+
+- Type-level:
+  - `#[morph(from = "SourceType")]`
+  - `#[morph(validate = "path::to::validator")]`
+- Field-level:
+  - `#[morph(from = "source_field")]`
+  - `#[morph(with = "path::to::transform")]` (expects `Result<T, E>`)
+  - `#[morph(default)]` (`Option<T> -> T` fallback to `Default::default()`)
+  - `#[morph(default = "expr")]` (`Option<T> -> T` fallback to expression)
+  - `#[morph(skip)]` (assign `Default::default()` to target field)
+- Enum variant-level:
+  - `#[morph(from = "SourceVariant")]` (otherwise same-name variant mapping is used)
 
 ## Full Documentation
 

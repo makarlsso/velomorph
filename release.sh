@@ -15,8 +15,8 @@ CRATES=(
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_README="${ROOT_DIR}/README.md"
 
-# crates.io index polling: must match [workspace.package].version in the repo root Cargo.toml when you bump releases.
-VERSION_EXPECTED="${VERSION_EXPECTED:-0.1.0}"
+# crates.io index polling: defaults to [workspace.package].version from root Cargo.toml.
+VERSION_EXPECTED="${VERSION_EXPECTED:-}"
 POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-15}"
 POLL_MAX_ATTEMPTS="${POLL_MAX_ATTEMPTS:-40}"
 ALLOW_DIRTY=false
@@ -74,12 +74,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Normalize VERSION_EXPECTED so that either "1.2.3" or "v1.2.3" work.
-VERSION_EXPECTED="${VERSION_EXPECTED#v}"
-
-RUN_MODE="--dry-run"
-if [[ "${EXECUTE}" == "true" ]]; then
-  RUN_MODE=""
+if [[ -z "${VERSION_EXPECTED}" ]]; then
+  VERSION_EXPECTED="$(
+    cargo metadata --no-deps --format-version 1 \
+      | python3 -c 'import json,sys; print(json.load(sys.stdin)["workspace_root"]);' \
+      | xargs -I{} python3 -c '
+import tomllib
+import pathlib
+root = pathlib.Path("{}")
+data = tomllib.loads((root / "Cargo.toml").read_text())
+print(data["workspace"]["package"]["version"])
+'
+  )"
 fi
+VERSION_EXPECTED="${VERSION_EXPECTED#v}"
 
 DIRTY_FLAG=""
 if [[ "${ALLOW_DIRTY}" == "true" ]]; then
@@ -217,7 +225,19 @@ fi
 
 for crate in "${CRATES[@]}"; do
   stage_readme_for_crate "${crate}"
-  run_cmd cargo publish -p "${crate}" ${RUN_MODE} ${DIRTY_FLAG}
+  if [[ "${EXECUTE}" == "true" ]]; then
+    run_cmd cargo publish -p "${crate}" ${DIRTY_FLAG}
+  else
+    if [[ "${crate}" == "${CRATES[0]}" ]]; then
+      # First crate has no intra-workspace publish dependency; package validates
+      # manifest shape and publishable contents.
+      run_cmd cargo package -p "${crate}" --no-verify ${DIRTY_FLAG}
+    else
+      # Downstream crates can fail package dry-runs before upstream versions are
+      # indexed on crates.io. Use local check in dry-run mode.
+      run_cmd cargo check -p "${crate}"
+    fi
+  fi
   cleanup_readme_for_crate "${crate}"
 
   # In dry-run mode, do not wait for index propagation.
