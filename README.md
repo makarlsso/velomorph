@@ -6,7 +6,7 @@
 [![Build Status](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml/badge.svg)](https://github.com/makarlsso/velomorph/actions/workflows/ci.yml)
 [![Crates.io Version](https://img.shields.io/crates/v/velomorph.svg)](https://crates.io/crates/velomorph)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
-![Version](https://img.shields.io/badge/version-0.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Rust](https://img.shields.io/badge/rust-1.75%2B-brown?logo=rust)
 
 </div>
@@ -31,7 +31,7 @@ Velomorph encodes those rules in one place with `#[derive(Morph)]` and attribute
 * **Type-aware derive** — The macro chooses strict vs passthrough vs borrowed strategies from your field types.
 * **Advanced controls** — Enum morphing, `with` transforms, defaults, skips, and type-level validation hooks.
 * **Flexible sources** — Map from the default source type or set `#[morph(from = "...")]` at type or field level.
-* **Janitor (opt-in)** — Tokio-backed channel to a background thread for deferred deallocation when you need it.
+* **Janitor (opt-in)** — Tokio-backed channel to a background thread for deferred deallocation: `Janitor::new()` / `Default` (unbounded, default) or `Janitor::bounded(n)` (capped queue; when full, `offload` drops on the caller—see below).
 
 ---
 
@@ -53,12 +53,12 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-velomorph = "0.2.1"
+velomorph = "1.0"
 ```
 Enable Janitor offloading explicitly when needed:
 ```toml
 [dependencies]
-velomorph = { version = "0.2.1", features = ["janitor"] }
+velomorph = { version = "1.0", features = ["janitor"] }
 ```
 Then create `src/main.rs`:
 
@@ -134,10 +134,16 @@ In janitor mode, the example explicitly offloads the heavy payload via `Janitor:
 ## 🛠 How it Works
 
 ### Background Deallocation (The Janitor Pattern)
-In high-load systems, calling `drop()` on a large `Vec` or a complex tree can take several milliseconds as the OS reclaims memory. **Velomorph** provides a Janitor helper that can move these objects to an isolated OS thread via an unbounded channel.
-Note: the queue is currently **unbounded** (no backpressure). If you call `Janitor::offload(...)` faster than the background thread can drop items, memory usage can grow without limit and may eventually lead to an OOM crash. Prefer using it for controlled, predictable workloads, and avoid untrusted/high-rate offload triggers.
+In high-load systems, calling `drop()` on a large `Vec` or a complex tree can take several milliseconds as the OS reclaims memory. **Velomorph** provides a `Janitor` helper that moves those objects to a dedicated OS thread via a Tokio channel.
 
-This ensures that the thread handling your critical network requests or business logic never stalls due to memory management jitter when you choose to offload deallocation from your code path.
+`Janitor` supports two modes (same `TryMorph` API; you still pass `&Janitor`):
+
+| Constructor | Queue | Behavior |
+| :--- | :--- | :--- |
+| `Janitor::new()` / `Default` | **Unbounded** | `offload` never blocks for backpressure. If you enqueue faster than the worker drops, **memory can grow without bound** and may eventually OOM. Prefer for controlled workloads. |
+| `Janitor::bounded(n)` | **Bounded** (capacity `n > 0`) | At most `n` items wait in the channel. When full, `offload` **drops the value on the caller thread** (that call is not deferred), so the queue stays capped and this stays safe to call from async runtimes (no blocking send on the Tokio worker). |
+
+This keeps your hot path from stalling on large `drop`s when you offload deliberately, while letting you choose latency-first (unbounded) vs capped pending-deferred-work (bounded) semantics.
 
 
 
@@ -258,16 +264,17 @@ Results:
 cargo bench -p velomorph --bench morph_bench
 ```
 
-## 🗺 v0.2 Status
+## 🗺 1.0 API surface
 
-Velomorph 0.2 includes:
+Velomorph **1.0** commits to semver stability for the public API described in this README and on [docs.rs](https://docs.rs/velomorph). Highlights:
 
-* 🧩 **Modular Janitor**: Optional background cleanup via feature flags.
+* 🧩 **Modular Janitor**: Optional background cleanup (`feature = "janitor"`); unbounded (`Janitor::new` / `Default`) or bounded (`Janitor::bounded`).
 * 🏷 **Flexible Sources**: Type-level and field-level `from` mapping.
 * 🛠 **Custom Transforms**: Field-level `with` transforms.
 * 🧱 **Defaults & Skips**: Field-level `default` / `default = "..."` and `skip` controls.
 * 🏗 **Validation Logic**: Type-level post-transformation validation hooks.
 * 🔄 **Enum Support**: Same-name variant mapping with explicit variant overrides.
+* 📦 **List mapping**: `TryMorph<Vec<U>> for Vec<T>` when `T: TryMorph<U>`.
 
 ---
 

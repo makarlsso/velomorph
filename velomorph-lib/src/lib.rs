@@ -1,5 +1,9 @@
 //! Core runtime library for Velomorph.
 //!
+//! **Version 1.0** stabilizes the public API (`Morph`, `TryMorph`, `MorphError`, and
+//! optional `Janitor` when the `janitor` feature is enabled) for semver-compatible
+//! evolution within the **1.x** line.
+//!
 //! This crate provides:
 //! - `Morph`, a derive macro re-export for generating transformations.
 //! - `TryMorph`, the trait implemented by generated code.
@@ -155,15 +159,33 @@ where
 /// `Janitor` owns a channel to a dedicated thread. Large objects can be sent to
 /// that thread for dropping, allowing the main path to continue with minimal
 /// interruption.
+///
+/// # Modes
+///
+/// - [`Janitor::new`] and [`Default::default`] use an **unbounded** queue: no
+///   backpressure; overload can grow memory without limit (see crate README).
+/// - [`Janitor::bounded`] uses a **bounded** queue: at most `capacity` items wait
+///   in the channel. If the queue is full, [`offload`](Janitor::offload) **drops
+///   the value on the caller thread** (that call is not deferred). This caps how
+///   much work can queue up without blocking an async runtime (see crate README).
 #[cfg(feature = "janitor")]
 #[derive(Clone)]
 pub struct Janitor {
-    sender: mpsc::UnboundedSender<Box<dyn std::any::Any + Send>>,
+    sender: JanitorSender,
+}
+
+#[cfg(feature = "janitor")]
+#[derive(Clone)]
+enum JanitorSender {
+    Unbounded(mpsc::UnboundedSender<Box<dyn std::any::Any + Send>>),
+    Bounded(mpsc::Sender<Box<dyn std::any::Any + Send>>),
 }
 
 #[cfg(feature = "janitor")]
 impl Janitor {
-    /// Creates a new janitor with a background worker thread.
+    /// Creates a new janitor with an **unbounded** queue and a background worker thread.
+    ///
+    /// This is the same as [`Default::default`].
     pub fn new() -> Self {
         let (tx, mut rx) = mpsc::unbounded_channel();
 
@@ -174,16 +196,69 @@ impl Janitor {
             }
         });
 
-        Self { sender: tx }
+        Self {
+            sender: JanitorSender::Unbounded(tx),
+        }
+    }
+
+    /// Creates a janitor with a **bounded** queue of the given capacity.
+    ///
+    /// `capacity` must be greater than zero. When the queue is full,
+    /// [`offload`](Janitor::offload) drops the value on the **caller** thread
+    /// instead of enqueueing it (see [`offload`](Janitor::offload)).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `capacity` is zero.
+    pub fn bounded(capacity: usize) -> Self {
+        assert!(
+            capacity > 0,
+            "Janitor::bounded: capacity must be greater than zero"
+        );
+
+        let (tx, mut rx) = mpsc::channel(capacity);
+
+        thread::spawn(move || {
+            while let Some(item) = rx.blocking_recv() {
+                std::mem::drop(item);
+            }
+        });
+
+        Self {
+            sender: JanitorSender::Bounded(tx),
+        }
     }
 
     /// Sends an object to the background thread for deallocation.
     ///
     /// This is useful when immediate drop cost would otherwise add jitter to
     /// a critical execution path.
+    ///
+    /// For an **unbounded** janitor, sends never block unless the receiver is
+    /// disconnected.
+    ///
+    /// For a **bounded** janitor, this uses a non-blocking send. If the queue is
+    /// full, the value is **dropped on the caller thread** (so it is not deferred
+    /// to the worker). This avoids blocking inside an async runtime (Tokio
+    /// `blocking_send` is not safe to call from async worker threads) while still
+    /// capping how many items can wait in the channel.
     #[inline(always)]
     pub fn offload<T: Send + 'static>(&self, item: T) {
-        let _ = self.sender.send(Box::new(item));
+        let boxed = Box::new(item) as Box<dyn std::any::Any + Send>;
+        match &self.sender {
+            JanitorSender::Unbounded(tx) => {
+                let _ = tx.send(boxed);
+            }
+            JanitorSender::Bounded(tx) => match tx.try_send(boxed) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(b)) => {
+                    std::mem::drop(b);
+                }
+                Err(mpsc::error::TrySendError::Closed(b)) => {
+                    std::mem::drop(b);
+                }
+            },
+        }
     }
 }
 

@@ -238,7 +238,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "full_showcase"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "thiserror",
  "tokio",
@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "velomorph"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "criterion",
  "thiserror",
@@ -848,7 +848,7 @@ dependencies = [
 
 [[package]]
 name = "velomorph-derive"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "proc-macro2",
  "quote",

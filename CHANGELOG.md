@@ -7,15 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-04-02
+
+### Added
+
+- **Stability:** First **stable** release under [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The public API documented in the crate root, `README.md`, and on docs.rs is intended to remain compatible across **1.x** patch and minor releases, except where noted in this changelog.
+
+### Changed
+
+- **Release:** `velomorph` and `velomorph-derive` are published at **1.0.0**. In `Cargo.toml`, depend with `velomorph = "1.0"` (and `velomorph-derive` matches for path/workspace users publishing both crates together).
+
+---
+
 ## [0.2.1] - 2026-04-01
 
 ### Added
 - **API:** Added blanket list mapping support: `TryMorph<Vec<U>> for Vec<T>` where `T: TryMorph<U>`, including both janitor and non-janitor signatures.
+- **Janitor:** `Janitor::bounded(capacity)` for a **bounded** queue (capacity must be positive). When the queue is full, `Janitor::offload` uses a non-blocking send and **drops the value on the caller thread** (so that call is not deferred). This caps pending deferred work and avoids blocking the async runtime. `Janitor::new()` and `Default` remain **unbounded**, preserving existing behavior.
 - **Tests:** Added integration coverage for successful `Vec<T> -> Vec<U>` morphing and first-error propagation behavior.
 - **Benchmarks:** Benchmarking is available across existing morph paths in `morph_bench`; this release adds explicit Vec-to-Vec coverage (`VecMorph_NoPayloadClone`) with both Velomorph and manual mapping paths.
 
 ### Changed
 - **Docs:** Updated README examples and dependency snippets to `0.2.1` and documented list mapping usage.
+- **Docs:** README and crate docs describe unbounded vs bounded `Janitor` modes; `examples/full_showcase` demonstrates both when built with `--features janitor`.
 
 ### Fixed
 

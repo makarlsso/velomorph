@@ -93,31 +93,54 @@ fn print_event(event: &ProcessedEvent<'_>, duration: Duration) {
 }
 
 #[cfg(feature = "janitor")]
-async fn run_with_janitor() -> Result<(), Box<dyn std::error::Error>> {
-    println!("--- Mode: WITH janitor feature ---");
-    println!("This demonstrates explicit background offloading with Janitor::offload.");
+async fn morph_with_janitor(
+    janitor: &Janitor,
+    label: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("{label}");
+    println!("Explicit background offloading with Janitor::offload before morph.");
 
-    let janitor = Janitor::new();
     let mut raw_packet = build_raw_packet();
     println!("Incoming packet with 100MB payload received.");
 
-    // Explicitly offload heavy payload before morphing.
     if let Some(heavy_payload) = raw_packet.payload.take() {
         janitor.offload(heavy_payload);
         println!("Payload offloaded to janitor thread.");
     }
 
     let start_time = std::time::Instant::now();
-    let event: ProcessedEvent = raw_packet.try_morph(&janitor)?;
+    let event: ProcessedEvent = raw_packet.try_morph(janitor)?;
     let duration = start_time.elapsed();
     print_event(&event, duration);
 
     println!("\nNote: The main thread is now free to handle the next packet.");
     println!("Janitor thread is handling deallocation in the background.");
 
-    // Demonstrate that we aren't blocked by the heavy deallocation
     sleep(Duration::from_millis(100)).await;
     println!("Cleanup is proceeding/finished without jittering the main path.");
+    Ok(())
+}
+
+#[cfg(feature = "janitor")]
+async fn run_with_janitor() -> Result<(), Box<dyn std::error::Error>> {
+    println!("--- Mode: WITH janitor feature ---");
+
+    println!("\n### Unbounded janitor (`Janitor::new` — default, no queue cap)");
+    let unbounded = Janitor::new();
+    morph_with_janitor(
+        &unbounded,
+        "Same as `Janitor::default()`: unbounded queue; overload can grow memory.",
+    )
+    .await?;
+
+    println!("\n### Bounded janitor (`Janitor::bounded(n)` — capped pending queue)");
+    let bounded = Janitor::bounded(8);
+    morph_with_janitor(
+        &bounded,
+        "Queue holds at most 8 pending drops; if full, `offload` drops on the caller (not deferred).",
+    )
+    .await?;
+
     Ok(())
 }
 

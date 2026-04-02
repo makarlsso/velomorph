@@ -6,7 +6,7 @@ categories = [
     "asynchronous",
     "development-tools",
     "network-programming",
-    "data-structures",
+    "rust-patterns",
 ]
 keywords = ["zero-copy", "transformation", "tokio", "derive", "latency"]
 version.workspace = true
@@ -22,7 +22,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-velomorph-derive = { path = "../velomorph-derive", version = "0.2.1" }
+velomorph-derive = { path = "../velomorph-derive", version = "1.0.0" }
 tokio = { workspace = true, optional = true }
 thiserror = { workspace = true }
 

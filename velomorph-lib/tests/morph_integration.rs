@@ -1,6 +1,9 @@
 use std::borrow::Cow;
 
 #[cfg(feature = "janitor")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(feature = "janitor")]
 use velomorph::Janitor;
 use velomorph::{Morph, MorphError, TryMorph};
 
@@ -333,4 +336,81 @@ fn morph_vec_to_vec_propagates_first_error() {
     let err = TryMorph::<Vec<TransformTarget>>::try_morph(input).expect_err("vec morph fails");
 
     assert!(matches!(err, MorphError::TransformError(msg) if msg.contains("too high")));
+}
+
+// --- Janitor `bounded` mode (feature `janitor`) --------------------------------
+
+#[cfg(feature = "janitor")]
+#[test]
+fn janitor_bounded_smoke_try_morph_matches_unbounded_behavior() {
+    let janitor = Janitor::bounded(8);
+    let raw = RawInput {
+        request_id: Some(7),
+        user_tag: "alpha",
+        metadata: Some("region-a".to_string()),
+        payload: Some(vec![1, 2, 3, 4]),
+    };
+
+    let mapped: ProcessedEvent = raw.try_morph(&janitor).expect("morph should succeed");
+
+    assert_eq!(mapped.request_id, 7);
+    assert_eq!(mapped.metadata.as_deref(), Some("region-a"));
+    assert!(matches!(mapped.user_tag, Cow::Borrowed("alpha")));
+}
+
+#[cfg(feature = "janitor")]
+#[test]
+#[should_panic(expected = "Janitor::bounded: capacity must be greater than zero")]
+fn janitor_bounded_zero_capacity_panics() {
+    let _ = Janitor::bounded(0);
+}
+
+#[cfg(feature = "janitor")]
+#[test]
+fn janitor_bounded_offload_when_full_drops_on_caller_thread() {
+    // Counts drops that run on the test thread (when `try_send` returns Full).
+    struct TraceDrop {
+        main: std::thread::ThreadId,
+        caller_drops: std::sync::Arc<AtomicUsize>,
+    }
+
+    impl Drop for TraceDrop {
+        fn drop(&mut self) {
+            if std::thread::current().id() == self.main {
+                self.caller_drops.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    }
+
+    let main = std::thread::current().id();
+    let caller_drops = std::sync::Arc::new(AtomicUsize::new(0));
+    let janitor = Janitor::bounded(1);
+
+    for _ in 0..5000 {
+        janitor.offload(TraceDrop {
+            main,
+            caller_drops: std::sync::Arc::clone(&caller_drops),
+        });
+    }
+
+    assert!(
+        caller_drops.load(Ordering::SeqCst) > 0,
+        "expected at least one Full queue with drop-on-caller (capacity 1 + many offloads)"
+    );
+}
+
+#[cfg(feature = "janitor")]
+#[test]
+fn janitor_bounded_clone_shares_queue() {
+    let j = Janitor::bounded(4);
+    let j2 = j.clone();
+    j.offload(vec![1u8, 2]);
+    j2.offload(vec![3u8, 4]);
+    let raw = RawInput {
+        request_id: Some(1),
+        user_tag: "x",
+        metadata: None,
+        payload: None,
+    };
+    let _: ProcessedEvent = raw.try_morph(&j).expect("morph ok");
 }
