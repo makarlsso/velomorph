@@ -23,10 +23,9 @@ package.sig
 Thumbs.db
 
 # --- IDEs & Editors ---
-# VS Code / Cursor settings
+# VS Code / Cursor settings / JetBrains / IntelliJ settings
 .vscode/
 .cursor/
-# JetBrains / IntelliJ settings
 .idea/
 
 # --- Environment & Security ---
@@ -39,5 +38,6 @@ Thumbs.db
 *.swp
 *~
 
+# Copied into place by `release.sh` during crate publishing;
+# keep it ignored to avoid requiring a clean git working tree.
 /velomorph-lib/README.md
-/.roadmap

@@ -1,6 +1,5 @@
 # ⚡ Velomorph
-
-**High-performance, zero-copy struct transformation with asynchronous background deallocation for low-latency Rust systems.**
+**Declarative, type-safe struct transformation for Rust — with zero-copy patterns and optional background cleanup.**
 
 <div align="center">
 
@@ -12,32 +11,37 @@
 
 </div>
 
-## 📖 Overview
+## Why Velomorph?
 
-**Velomorph** is a specialized toolkit for Rust developers who need to transform data structures at extreme speeds. It is specifically designed for high-throughput network applications, real-time data processing, and microservices where every microsecond of P99 latency matters.
+Boundary layers (network packets, config blobs, legacy DTOs) often need the same mapping logic repeated across types: rename fields, unwrap options safely, borrow strings when possible, and validate before the rest of the system sees the data. Hand-written glue works, but it drifts, duplicates error handling, and hides intent.
 
-It solves three critical bottlenecks in data pipelines:
-1.  **Memory Jitter**: Large objects are offloaded to a background "Janitor" thread for deallocation, preventing `drop()` calls from blocking your critical path.
-2.  **Allocation Overhead**: First-class support for `Cow<'a, str>` allows you to borrow strings from input buffers rather than cloning them.
-3.  **Boilerplate**: A sophisticated procedural macro handles the mapping between `Option<T>` and `T` with built-in strict validation.
+Velomorph encodes those rules in one place with `#[derive(Morph)]` and attributes, so transformations stay **explicit**, **consistent**, and **easy to review**.
+
+### What you get
+
+1. **Predictable mapping semantics** — Strict `Option<T> → T`, passthrough `Option`, and borrowed `Cow` paths are generated from types, not scattered `unwrap` calls.
+2. **Less boilerplate** — Field renames (`from`), conversions (`with`), defaults, skips, and post-checks (`validate`) without copy-pasting struct initializers.
+3. **Zero-copy where it fits** — `Cow<'a, str>` can borrow from the source when lifetimes allow.
+4. **Optional Janitor** — Move expensive drops off your hot path when you enable the `janitor` feature and use the helper deliberately.
 
 ---
 
-## ✨ Key Features
+## Key features
 
-* 🚀 **Zero-Copy Transformation**: Leverage Rust's ownership model to move or borrow data with zero heap allocations during morphing.
-* 🧹 **The Janitor Pattern**: Offload heavy payloads (like `Vec<u8>`) to a dedicated cleanup thread and protect P99 latency from deallocation spikes.
-* 🛡️ **Type-Aware Macro**: The `#[derive(Morph)]` macro automatically detects target types to decide between **Strict** (error if None), **Passthrough** (Option to Option), or **Borrowed** (Cow) modes.
-* 🔀 **Advanced Mapping Controls**: Supports enum morphing, field transforms (`with`), defaults, skips, and type-level validation hooks.
-* 🔌 **Tokio Integration (Opt-in)**: Enable the `janitor` feature when background deallocation is needed.
+* **Type-aware derive** — The macro chooses strict vs passthrough vs borrowed strategies from your field types.
+* **Advanced controls** — Enum morphing, `with` transforms, defaults, skips, and type-level validation hooks.
+* **Flexible sources** — Map from the default source type or set `#[morph(from = "...")]` at type or field level.
+* **Janitor (opt-in)** — Tokio-backed channel to a background thread for deferred deallocation when you need it.
 
 ---
 
 ## 🏗 Project Structure
 
-Velomorph is structured as a workspace for maximum efficiency:
-- `velomorph-lib`: The core runtime, traits, and the Janitor implementation.
-- `velomorph-derive`: The procedural macro that generates the high-performance transformation code.
+Velomorph is a Cargo workspace:
+
+- `velomorph-lib` — Runtime: `TryMorph`, `MorphError`, optional `Janitor`.
+- `velomorph-derive` — Procedural macro that implements `TryMorph`.
+- `examples/full_showcase` — Runnable examples for both janitor and non-janitor paths.
 
 ---
 
@@ -193,7 +197,65 @@ This is implemented as `TryMorph<Vec<U>> for Vec<T>` where `T: TryMorph<U>`, and
 ### Memory Safety & Lifetimes
 Velomorph is built on top of Rust's strict ownership rules. By using `Cow<'a, str>`, the compiler guarantees that the source buffer (e.g., your network packet) lives at least as long as your transformed `InternalEvent`. If the source buffer is dropped, the compiler will catch the error at build time.
 
+## When to use Velomorph vs hand-written code
+
+### Performance reality
+
+Benchmarks in this repo show that hand-written mapping can be a few nanoseconds faster in tiny morph-only micro-cases. In practice, that difference is often acceptable (or irrelevant) because real bottlenecks are usually elsewhere: I/O, parsing, serialization, network waits, database calls, or large memory copies/drops.
+
+### Practical rule of thumb
+
+**Use Velomorph by default** when you want faster delivery, safer boundaries, and consistent mapping behavior across many structs.
+
+Use hand-written code selectively for tiny, stable, inner-loop hot paths where profiling proves that this exact mapping function is the bottleneck.
+
+For the measured numbers and methodology, see the benchmark section below.
+
 ---
+
+## 📊 Benchmarks: Performance Proof
+
+These benchmarks are split into multiple groups to avoid misleading conclusions:
+
+- `MorphOnly_NoPayloadClone`: measures transform logic only (no 1MB payload clone in loop).
+- `PayloadCloneDrop_1MB`: measures clone/drop-heavy end-to-end behavior separately.
+- `VecMorph_NoPayloadClone`: measures vector-morphing overhead (1k elements) without the 1MB payload clone.
+
+### Latest Run (Apr 2, 2026)
+
+These numbers are from a local benchmark run. Absolute timings can shift on production servers due to CPU/power settings, scheduler differences, and background contention, but the relative conclusions about "morph-only" vs "clone/drop-heavy" work still hold.
+
+Command:
+
+```bash
+cargo bench -p velomorph --bench morph_bench
+```
+
+Results:
+
+| Group | Benchmark | Time (range) |
+| :--- | :--- | :--- |
+| MorphOnly_NoPayloadClone | Velomorph | **21.778 ns - 23.450 ns** |
+| MorphOnly_NoPayloadClone | ManualBorrowed | **17.408 ns - 18.290 ns** |
+| PayloadCloneDrop_1MB | CloneRawInput | **18.061 us - 18.608 us** |
+| PayloadCloneDrop_1MB | ManualBorrowed_afterClone | **17.940 us - 18.409 us** |
+| PayloadCloneDrop_1MB | Velomorph_afterClone | **18.591 us - 19.322 us** |
+| VecMorph_NoPayloadClone | VelomorphVec_1k | **32.099 us - 33.489 us** |
+| VecMorph_NoPayloadClone | ManualVecBorrowed_1k | **20.770 us - 21.670 us** |
+
+### Interpretation
+
+1. **Morph-only cost remains nanosecond scale**, so both variants stay highly efficient at pure field mapping.
+2. **1MB clone/drop dominates end-to-end timing** (microseconds), which matches the memory movement/allocation pressure expected in this path.
+3. **Vector morphing adds additional microsecond overhead** (1k elements). In this run, `ManualVecBorrowed_1k` is faster than `VelomorphVec_1k`.
+4. **Do not compare ns and us rows directly** (and avoid mixing vector vs clone/drop categories). They intentionally measure different workloads/layers.
+5. This run reports statistically significant improvements for all shown sub-benchmarks (`p < 0.05`), with small outlier counts observed by `criterion`.
+
+### Reproducing
+
+```bash
+cargo bench -p velomorph --bench morph_bench
+```
 
 ## 🗺 v0.2 Status
 
@@ -229,4 +291,4 @@ Licensed under either of:
 
 ---
 
-**Built for speed. Engineered for reliability. ⚡ Velomorph.**
+**Clear mappings. Safer boundaries. ⚡ Velomorph.**
