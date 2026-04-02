@@ -10,7 +10,7 @@ In most projects, depend on `velomorph` instead:
 
 ```toml
 [dependencies]
-velomorph = "0.2.0"
+velomorph = "0.2.1"
 ```
 
 Then derive on your target type:

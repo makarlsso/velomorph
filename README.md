@@ -105,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Morph!
     // - `janitor` is available in this signature when the feature is enabled.
     // - 'username' is borrowed (zero allocations).
-    // - 'id' is validated and unwrapped.
+    // - 'id' is unwrapped (fails with `MorphError::MissingField` if None).
     #[cfg(feature = "janitor")]
     let event: InternalEvent = raw.try_morph(&janitor)?;
     #[cfg(not(feature = "janitor"))]
@@ -135,6 +135,7 @@ In janitor mode, the example explicitly offloads the heavy payload via `Janitor:
 
 ### Background Deallocation (The Janitor Pattern)
 In high-load systems, calling `drop()` on a large `Vec` or a complex tree can take several milliseconds as the OS reclaims memory. **Velomorph** provides a Janitor helper that can move these objects to an isolated OS thread via an unbounded channel.
+Note: the queue is currently **unbounded** (no backpressure). If you call `Janitor::offload(...)` faster than the background thread can drop items, memory usage can grow without limit and may eventually lead to an OOM crash. Prefer using it for controlled, predictable workloads, and avoid untrusted/high-rate offload triggers.
 
 This ensures that the thread handling your critical network requests or business logic never stalls due to memory management jitter when you choose to offload deallocation from your code path.
 
